@@ -1,0 +1,4 @@
+docker build -t maintenance .
+docker tag maintenance eu.gcr.io/rocprj/maintenance
+docker push eu.gcr.io/rocprj/maintenance
+gcloud run deploy maintenance --image eu.gcr.io/rocprj/maintenance

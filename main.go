@@ -1,3 +1,24 @@
+package main
+
+import (
+	"fmt"
+	"log"
+	"net/http"
+	"os"
+)
+
+func main() {
+	port := os.Getenv("PORT")
+	if port == "" {
+		port = "8080"
+	}
+	http.HandleFunc("/", HelloServer)
+	log.Println("Serve on :" + port)
+	http.ListenAndServe(":"+port, nil)
+}
+
+func HelloServer(w http.ResponseWriter, r *http.Request) {
+	fmt.Fprintf(w, `
 <!doctype html>
 <title>Maintenance</title>
 <style>
@@ -15,3 +36,6 @@
         <p>Travaux en cours, merci de revenir un peu plus tard.</p>
     </div>
 </article>
+%s
+`, os.Getenv("K_REVISION"))
+}
