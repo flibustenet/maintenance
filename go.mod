@@ -2,4 +2,9 @@ module go.flibuste.net/maintenance
 
 go 1.19
 
-require golang.org/x/exp v0.0.0-20230321023759-10a507213a29
+require (
+	cloud.google.com/go/compute/metadata v0.2.3
+	github.com/google/uuid v1.3.0
+)
+
+require cloud.google.com/go/compute v1.14.0 // indirect

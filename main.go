@@ -7,8 +7,12 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"strings"
 
-	"golang.org/x/exp/slog"
+	"log/slog"
+
+	"cloud.google.com/go/compute/metadata"
+	"github.com/google/uuid"
 )
 
 // GCPLogStdout output json ready for gcp
@@ -60,67 +64,100 @@ func (m *GCPLogStdout) Handle(ctx context.Context, rec slog.Record) error {
 	for _, a := range m.attrs {
 		s.Labels[a.Key] = a.Value.String()
 	}
-	rec.Attrs(func(a slog.Attr) {
+	rec.Attrs(func(a slog.Attr) bool {
 		s.Labels[a.Key] = a.Value.String()
+		return true
 	})
 	res, _ := json.Marshal(s)
 	fmt.Printf("%s\n", res)
 	return nil
 }
 
-func main() {
-	slog.SetDefault(slog.New(&GCPLogStdout{}).With("maintenance", "maintenance"))
-	/*
-		opts := slog.HandlerOptions{
-			ReplaceAttr: func(groups []string, a slog.Attr) slog.Attr {
-				switch a.Key {
-				case "level":
-					switch a.Value.String() {
-					case "DEBUG":
-						return slog.String("severity", "DEBUG")
-					case "INFO":
-						return slog.String("severity", "INFO")
-					case "WARN":
-						return slog.String("severity", "WARNING")
-					case "ERROR":
-						return slog.String("severity", "ERROR")
-					}
-				case "msg":
-					a.Key = "message"
-					return a
-				}
-				return a
-			},
-			Level: slog.LevelDebug,
-		}
-		slog.SetDefault(slog.New(opts.NewJSONHandler(os.Stdout)).With("maintenance", "maintenance"))
+var projectID string
 
-			opts := slog.HandlerOptions{
-				AddSource: true,
-				ReplaceAttr: func(groups []string, a slog.Attr) slog.Attr {
-					if a.Key == "level" {
-						return slog.Attr{Key: "severity", Value: a.Value}
-					}
-					return a
-				},
-			}
-			std := opts.NewJSONHandler(os.Stdout)
-			slog.SetDefault(slog.New(std))
+func main() {
+	projectID = os.Getenv("GOOGLE_CLOUD_PROJECT")
+	if projectID == "" {
+		projectID, _ = metadata.ProjectID()
+	}
+	fmt.Println(Entry{
+		Severity:  "NOTICE",
+		Message:   "GOOGLE_CLOUD_PROJECT=" + projectID,
+		Component: "arbitrary-property",
+		//          Trace:     trace,
+	})
+	/*
+		fmt.Println(Entry{
+			Severity:  "INFO",
+			Message:   "This is the default display field.",
+			Component: "arbitrary-property",
+			Trace:     "1",
+		})
+		fmt.Println(Entry{
+			Severity:  "INFO",
+			Message:   "deux",
+			Component: "arbitrary-property",
+			Trace:     "1",
+		})
 	*/
-	slog.Info("message", "mylab", "mmm", "tylab", "ttt")
-	slog.Warn("warning message", "mylab", "mmm", "tylab", "ttt")
-	slog.Error("Error message", "err", fmt.Errorf("oups"))
-	slog.Debug("Debug message")
+
+	//	slog.SetDefault(slog.New(&GCPLogStdout{}).With("maintenance", "maintenance"))
+	opts := &slog.HandlerOptions{
+		ReplaceAttr: func(groups []string, a slog.Attr) slog.Attr {
+			switch a.Key {
+			case "level":
+				switch a.Value.String() {
+				case "DEBUG":
+					return slog.String("severity", "DEBUG")
+				case "INFO":
+					return slog.String("severity", "INFO")
+				case "WARN":
+					return slog.String("severity", "WARNING")
+				case "ERROR":
+					return slog.String("severity", "ERROR")
+				}
+			case "time":
+				return slog.Attr{}
+			case "msg":
+				a.Key = "message"
+				return a
+			case "trace":
+				return slog.String("logging.googleapis.com/trace",
+					fmt.Sprintf("projects/%s/traces/%s", projectID, a.Value.String()))
+			}
+			return a
+		},
+		Level: slog.LevelDebug,
+	}
+
+	//trace := uuid.NewString()
+	slog.SetDefault(slog.New(slog.NewJSONHandler(os.Stderr, opts)))
+	sj := slog.With("starting", "starting",
+		"trace", uuid.NewString())
+	sj.Info("message", "mylab", "mmm", "tylab", "ttt")
+	sj.Warn("warning message", "mylab", "mmm", "tylab", "ttt")
+	sj.Error("Error message", "err", fmt.Errorf("oups"))
+	sj.Debug("Debug message")
+
 	port := os.Getenv("PORT")
 	if port == "" {
 		port = "8080"
 	}
 	http.HandleFunc("/", HelloServer)
-	log.Println("Serve on :" + port)
+	sj.Info("Serve on :" + port)
 	http.ListenAndServe(":"+port, nil)
 }
 
 func HelloServer(w http.ResponseWriter, r *http.Request) {
+	traceHeader := r.Header.Get("X-Cloud-Trace-Context")
+	traceParts := strings.Split(traceHeader, "/")
+	trace := ""
+	if len(traceParts) > 0 && len(traceParts[0]) > 0 {
+		trace = traceParts[0]
+	}
+
+	slog.Info("ici", "trace", trace)
+	slog.Info("la", "trace", trace)
 	fmt.Fprintf(w, `
 <!doctype html>
 <title>Maintenance</title>
@@ -137,4 +174,26 @@ func HelloServer(w http.ResponseWriter, r *http.Request) {
         <div title='%s'>Travaux en cours, merci de revenir un peu plus tard.</div>
 </article>
 `, os.Getenv("K_REVISION"))
+}
+
+// Entry defines a log entry.
+type Entry struct {
+	Message  string `json:"message"`
+	Severity string `json:"severity,omitempty"`
+	Trace    string `json:"logging.googleapis.com/trace,omitempty"`
+
+	// Logs Explorer allows filtering and display of this as `jsonPayload.component`.
+	Component string `json:"component,omitempty"`
+}
+
+// String renders an entry structure to the JSON format expected by Cloud Logging.
+func (e Entry) String() string {
+	if e.Severity == "" {
+		e.Severity = "INFO"
+	}
+	out, err := json.Marshal(e)
+	if err != nil {
+		log.Printf("json.Marshal: %v", err)
+	}
+	return string(out)
 }
