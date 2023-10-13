@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -15,64 +14,6 @@ import (
 	"github.com/google/uuid"
 )
 
-// GCPLogStdout output json ready for gcp
-// implement slog.Handler
-type GCPLogStdout struct {
-	attrs []slog.Attr
-}
-
-// Enabled implement slog.Handler for all levels
-func (m *GCPLogStdout) Enabled(c context.Context, level slog.Level) bool {
-	return true
-}
-
-// WithAttrs implement slog.Handler
-func (m *GCPLogStdout) WithAttrs(attrs []slog.Attr) slog.Handler {
-	nlog := &GCPLogStdout{}
-	nlog.attrs = append(m.attrs, attrs...)
-	return nlog
-}
-
-// WithGroup not implemented
-func (m *GCPLogStdout) WithGroup(name string) slog.Handler {
-	return m
-}
-
-type sGCP struct {
-	Severity string            `json:"severity"`
-	Message  string            `json:"message"`
-	Labels   map[string]string `json:"labels,omitempty"`
-}
-
-// Handle implement slog.Handler
-func (m *GCPLogStdout) Handle(ctx context.Context, rec slog.Record) error {
-	s := sGCP{}
-	s.Severity = "INFO"
-	s.Message = rec.Message
-	switch rec.Level {
-	case slog.LevelDebug:
-		s.Severity = "DEBUG"
-	case slog.LevelInfo:
-		s.Severity = "INFO"
-	case slog.LevelWarn:
-		s.Severity = "WARNING"
-	case slog.LevelError:
-		s.Severity = "ERROR"
-	}
-
-	s.Labels = map[string]string{}
-	for _, a := range m.attrs {
-		s.Labels[a.Key] = a.Value.String()
-	}
-	rec.Attrs(func(a slog.Attr) bool {
-		s.Labels[a.Key] = a.Value.String()
-		return true
-	})
-	res, _ := json.Marshal(s)
-	fmt.Printf("%s\n", res)
-	return nil
-}
-
 var projectID string
 
 func main() {
@@ -80,28 +21,6 @@ func main() {
 	if projectID == "" {
 		projectID, _ = metadata.ProjectID()
 	}
-	fmt.Println(Entry{
-		Severity:  "NOTICE",
-		Message:   "GOOGLE_CLOUD_PROJECT=" + projectID,
-		Component: "arbitrary-property",
-		//          Trace:     trace,
-	})
-	/*
-		fmt.Println(Entry{
-			Severity:  "INFO",
-			Message:   "This is the default display field.",
-			Component: "arbitrary-property",
-			Trace:     "1",
-		})
-		fmt.Println(Entry{
-			Severity:  "INFO",
-			Message:   "deux",
-			Component: "arbitrary-property",
-			Trace:     "1",
-		})
-	*/
-
-	//	slog.SetDefault(slog.New(&GCPLogStdout{}).With("maintenance", "maintenance"))
 	opts := &slog.HandlerOptions{
 		ReplaceAttr: func(groups []string, a slog.Attr) slog.Attr {
 			switch a.Key {
@@ -122,8 +41,22 @@ func main() {
 				a.Key = "message"
 				return a
 			case "trace":
-				return slog.String("logging.googleapis.com/trace",
-					fmt.Sprintf("projects/%s/traces/%s", projectID, a.Value.String()))
+				if projectID != "" {
+					return slog.String("logging.googleapis.com/trace",
+						fmt.Sprintf("projects/%s/traces/%s", projectID, a.Value.String()))
+				}
+				return slog.Attr{}
+			}
+			return a
+		},
+		Level: slog.LevelDebug,
+	}
+
+	optsTxt := &slog.HandlerOptions{
+		ReplaceAttr: func(groups []string, a slog.Attr) slog.Attr {
+			switch a.Key {
+			case "level", "time", "trace":
+				return slog.Attr{}
 			}
 			return a
 		},
@@ -131,7 +64,12 @@ func main() {
 	}
 
 	//trace := uuid.NewString()
-	slog.SetDefault(slog.New(slog.NewJSONHandler(os.Stderr, opts)))
+
+	if os.Getenv("K_SERVICE") != "" { // on CloudRun
+		slog.SetDefault(slog.New(slog.NewJSONHandler(os.Stderr, opts)))
+	} else {
+		slog.SetDefault(slog.New(slog.NewTextHandler(os.Stderr, optsTxt)))
+	}
 	sj := slog.With("starting", "starting",
 		"trace", uuid.NewString())
 	sj.Info("message", "mylab", "mmm", "tylab", "ttt")
@@ -158,6 +96,8 @@ func HelloServer(w http.ResponseWriter, r *http.Request) {
 
 	slog.Info("ici", "trace", trace)
 	slog.Info("la", "trace", trace)
+	headers, _ := json.MarshalIndent(r.Header, "", "  ")
+	slog.Info(fmt.Sprint(string(headers)))
 	fmt.Fprintf(w, `
 <!doctype html>
 <title>Maintenance</title>
@@ -173,7 +113,8 @@ func HelloServer(w http.ResponseWriter, r *http.Request) {
 <article>
         <div title='%s'>Travaux en cours, merci de revenir un peu plus tard.</div>
 </article>
-`, os.Getenv("K_REVISION"))
+`, os.Getenv("K_REVISION"),
+	)
 }
 
 // Entry defines a log entry.
