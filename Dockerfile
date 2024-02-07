@@ -4,10 +4,10 @@ COPY . /app
 RUN go mod download
 RUN CGO_ENABLED=0 go build -o maintenance
 
-FROM gcr.io/distroless/static-debian12
+#FROM gcr.io/distroless/static-debian12
 
 # Copy the binary to the production image from the builder stage.
-COPY --from=builder /app/maintenance /app/maintenance
+#COPY --from=builder /app/maintenance /app/maintenance
 WORKDIR /app
 
 
