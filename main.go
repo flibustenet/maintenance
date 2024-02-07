@@ -12,6 +12,7 @@ func main() {
 	if port == "" {
 		port = "8080"
 	}
+	http.HandleFunc("/hello/{x}", HelloServer)
 	http.HandleFunc("/", HelloServer)
 	log.Println("Listen :" + port)
 	http.ListenAndServe(":"+port, nil)
@@ -31,8 +32,7 @@ func HelloServer(w http.ResponseWriter, r *http.Request) {
 </style>
 
 <article>
-        <div>Travaux en cours, merci de revenir un peu plus tard...</div>
+        <div>Travaux en cours, merci de revenir un peu plus tard %s...</div>
 </article>
-`,
-	)
+`, r.PathValue("x"))
 }

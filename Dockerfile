@@ -1,4 +1,5 @@
-FROM golang:1.22 as builder
+#FROM amd64/golang:latest
+FROM golang:1.22.0-alpine3.19
 WORKDIR /app
 COPY . /app
 RUN go mod download
