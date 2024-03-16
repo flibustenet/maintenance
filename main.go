@@ -19,6 +19,7 @@ func main() {
 }
 
 func HelloServer(w http.ResponseWriter, r *http.Request) {
+	log.Println(r.URL.RequestURI())
 	fmt.Fprintf(w, `
 <!doctype html>
 <title>Maintenance</title>
