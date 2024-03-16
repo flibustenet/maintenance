@@ -3,8 +3,10 @@ package main
 import (
 	"fmt"
 	"log"
+	"math/rand"
 	"net/http"
 	"os"
+	"time"
 )
 
 func main() {
@@ -19,7 +21,9 @@ func main() {
 }
 
 func HelloServer(w http.ResponseWriter, r *http.Request) {
-	log.Println(r.URL.RequestURI())
+	rd := rand.Intn(20)
+	log.Printf("%s sleep %ds", r.URL.RequestURI(), rd)
+	time.Sleep(time.Duration(rd) * time.Second)
 	fmt.Fprintf(w, `
 <!doctype html>
 <title>Maintenance</title>
