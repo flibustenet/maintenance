@@ -6,6 +6,7 @@ import (
 	"math/rand"
 	"net/http"
 	"os"
+	"strconv"
 	"time"
 )
 
@@ -22,8 +23,14 @@ func main() {
 }
 
 func Probe(w http.ResponseWriter, r *http.Request) {
-	rd := rand.Intn(20)
-	log.Printf("%s sleep %ds", r.URL.RequestURI(), rd)
+	max, _ := strconv.Atoi(r.FormValue("max"))
+	rd := 0
+	if max > 0 {
+		rd = rand.Intn(max)
+	}
+	s := fmt.Sprintf("%s sleep %ds", r.URL.RequestURI(), rd)
+	fmt.Fprint(w, s)
+	log.Println(s)
 	time.Sleep(time.Duration(rd) * time.Second)
 }
 func HelloServer(w http.ResponseWriter, r *http.Request) {
