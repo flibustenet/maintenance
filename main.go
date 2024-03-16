@@ -15,15 +15,18 @@ func main() {
 		port = "8080"
 	}
 	http.HandleFunc("/hello/{x}", HelloServer)
+	http.HandleFunc("/probe", Probe)
 	http.HandleFunc("/", HelloServer)
 	log.Println("Listen :" + port)
 	http.ListenAndServe(":"+port, nil)
 }
 
-func HelloServer(w http.ResponseWriter, r *http.Request) {
+func Probe(w http.ResponseWriter, r *http.Request) {
 	rd := rand.Intn(20)
 	log.Printf("%s sleep %ds", r.URL.RequestURI(), rd)
 	time.Sleep(time.Duration(rd) * time.Second)
+}
+func HelloServer(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintf(w, `
 <!doctype html>
 <title>Maintenance</title>
