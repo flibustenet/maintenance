@@ -33,6 +33,7 @@ func Probe(w http.ResponseWriter, r *http.Request) {
 	log.Println(s)
 	time.Sleep(time.Duration(rd) * time.Second)
 }
+
 func HelloServer(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintf(w, `
 <!doctype html>
