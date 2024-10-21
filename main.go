@@ -35,6 +35,13 @@ func Probe(w http.ResponseWriter, r *http.Request) {
 }
 
 func HelloServer(w http.ResponseWriter, r *http.Request) {
+	redir := r.Header.Get("x-redirect")
+	if redir != "" {
+		fmt.Fprintf(w, `<!DOCTYPE html><html lang="fr"><body>`)
+		fmt.Fprintf(w, "Nouvelle adresse : <a href='https://%s'>%s</a>", redir, redir)
+		return
+	}
+
 	fmt.Fprintf(w, `
 <!doctype html>
 <title>Maintenance</title>
